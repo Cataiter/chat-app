@@ -7,7 +7,6 @@ import time
 # CONFIGURACIÓN DE FIREBASE DESDE SECRETS
 # --------------------------------------------
 
-# Leer secretos
 firebase_secrets = st.secrets.get("firebase", {})
 
 # Validar que exista la URL de la base de datos
@@ -105,5 +104,6 @@ cargar_mensajes()
 # Recarga automática cada 1 segundo
 time.sleep(1)
 st.rerun()
+
 
 
