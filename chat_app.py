@@ -1,109 +1,62 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
-import time
 
-# --------------------------------------------
-# CONFIGURACIÓN DE FIREBASE DESDE SECRETS
-# --------------------------------------------
+# --- CONEXIÓN A FIREBASE USANDO st.secrets ---
 
+# 1. Obtener la configuración general de la sección [firebase]
 firebase_secrets = st.secrets.get("firebase", {})
 
-# Validar que exista la URL de la base de datos
-FIREBASE_URL = firebase_secrets.get("database_url")
-if not FIREBASE_URL:
-    st.error("Error: La clave 'database_url' no se encuentra en st.secrets['firebase']")
-    st.stop()
+# 2. Intentamos obtener la clave renombrada para evitar el error de cache/lectura.
+FIREBASE_URL = firebase_secrets.get("db_url_final")
 
-# Inicializar Firebase solo una vez
+# Validar que la clave exista
+if not FIREBASE_URL:
+    # Si la clave 'db_url_final' no se encuentra, mostramos un error claro.
+    st.error("Error: La clave 'db_url_final' no se encuentra en st.secrets['firebase']. Vuelve a revisar la configuración de secretos.")
+    st.stop()
+    
+# Si Firebase aún no está inicializado, lo hacemos.
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate(dict(firebase_secrets))
-        firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_URL})
+        # Crea las credenciales a partir de los secretos
+        # Usamos el diccionario completo, excluyendo la URL que ya extrajimos
+        cred_data = {
+            "type": firebase_secrets.get("type"),
+            "project_id": firebase_secrets.get("project_id"),
+            "private_key_id": firebase_secrets.get("private_key_id"),
+            # Reemplaza los escapes de línea (\n) por la forma correcta antes de usar
+            "private_key": firebase_secrets.get("private_key").replace('\\n', '\n'),
+            "client_email": firebase_secrets.get("client_email"),
+            "client_id": firebase_secrets.get("client_id"),
+            "auth_uri": firebase_secrets.get("auth_uri"),
+            "token_uri": firebase_secrets.get("token_uri"),
+            "auth_provider_x509_cert_url": firebase_secrets.get("auth_provider_x509_cert_url"),
+            "client_x509_cert_url": firebase_secrets.get("client_x509_cert_url"),
+            "universe_domain": firebase_secrets.get("universe_domain")
+        }
+        
+        # Carga las credenciales
+        cred = credentials.Certificate(cred_data)
+
+        # Inicializa la app de Firebase
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': FIREBASE_URL
+        })
+        st.success("Conexión a Firebase exitosa. ¡Listo para trabajar!")
+        
     except Exception as e:
         st.error(f"Error al inicializar Firebase: {e}")
         st.stop()
 
-# Referencia a la rama 'chat'
-ref = db.reference("chat")
+# --- EJEMPLO DE USO (Muestra el estado de la conexión) ---
+st.title("Aplicación Conectada a Firebase")
+st.write(f"Conectado a la URL: **{FIREBASE_URL}**")
 
-# --------------------------------------------
-# CONFIG STREAMLIT
-# --------------------------------------------
-
-st.set_page_config(layout="wide")
-st.title("💬 Chat de Clase (Powered by Streamlit)")
-
-# Nombre del usuario
-if "nombre" not in st.session_state:
-    st.session_state.nombre = None
-
-if st.session_state.nombre is None:
-    st.session_state.nombre = st.text_input(
-        "Ingresa tu nombre para comenzar a chatear:", key="user_input"
-    )
-    if not st.session_state.nombre:
-        st.stop()
-    else:
-        st.success(f"¡Hola, {st.session_state.nombre}! Ya puedes chatear.")
-
-# Contenedor del chat
-chat_container = st.container()
-
-# --------------------------------------------
-# FUNCIÓN: CARGAR MENSAJES
-# --------------------------------------------
-
-def cargar_mensajes():
-    """Recupera los mensajes de Firebase y los muestra."""
-    results = ref.get()
-    mensajes_a_mostrar = []
-
-    if results and isinstance(results, dict):
-        mensajes_ordenados = sorted(results.items(), key=lambda x: x[1].get("timestamp", 0))
-        for key, data in mensajes_ordenados:
-            if "usuario" in data and "texto" in data:
-                mensajes_a_mostrar.append(f"**{data['usuario']}**: {data['texto']}")
-
-    with chat_container:
-        st.markdown("<hr>", unsafe_allow_html=True)
-        for msg in mensajes_a_mostrar[-20:]:
-            st.markdown(msg)
-        st.markdown("<hr>", unsafe_allow_html=True)
-
-# --------------------------------------------
-# FUNCIÓN: ENVIAR MENSAJE
-# --------------------------------------------
-
-def enviar_mensaje():
-    if st.session_state.message_input:
-        nuevo_mensaje = {
-            "usuario": st.session_state.nombre,
-            "texto": st.session_state.message_input,
-            "timestamp": time.time()
-        }
-        ref.push(nuevo_mensaje)
-        st.session_state.message_input = ""
-        cargar_mensajes()
-
-# --------------------------------------------
-# FORMULARIO DEL CHAT
-# --------------------------------------------
-
-with st.form(key="message_form"):
-    st.text_input(
-        "Escribe tu mensaje:",
-        key="message_input",
-        placeholder="¡Escribe aquí y presiona Enter o el botón para enviar!"
-    )
-    st.form_submit_button("Enviar Mensaje", on_click=enviar_mensaje)
-
-# Cargar mensajes al iniciar
-cargar_mensajes()
-
-# Recarga automática cada 1 segundo
-time.sleep(1)
-st.rerun()
-
-
-
+# Referencia a la base de datos (Ejemplo)
+try:
+    ref = db.reference('/')
+    st.write("Estructura de la base de datos (raíz):")
+    st.json(ref.get())
+except Exception as e:
+    st.warning(f"No se pudo leer la raíz de la BD (es normal si está vacía, pero verifica las reglas): {e}")
