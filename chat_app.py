@@ -8,7 +8,7 @@ from firebase_admin import credentials, db
 firebase_secrets = st.secrets.get("firebase", {})
 
 # 2. Intentamos obtener la clave renombrada para evitar el error de cache/lectura.
-FIREBASE_URL = firebase_secrets.get("https://chat-e752f-default-rtdb.europe-west1.firebasedatabase.app/")
+FIREBASE_URL = "https://chat-e752f-default-rtdb.europe-west1.firebasedatabase.app/"
 
 # Validar que la clave exista
 if not FIREBASE_URL:
@@ -60,4 +60,5 @@ try:
     st.json(ref.get())
 except Exception as e:
     st.warning(f"No se pudo leer la raíz de la BD (es normal si está vacía, pero verifica las reglas): {e}")
+
 
